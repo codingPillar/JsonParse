@@ -40,7 +40,7 @@ struct JsonObj{
         /* THE USAGE OF UNIONS AND STD::VARIANT IS WAYY TOO TRASH, THIS IS WHY C IS JUST BETTER */
         void *value = nullptr;
     };
-    std::unordered_map<std::string, struct JsonValue> values;
+    std::unordered_map<std::string, JsonValue> values;
 };
 
 struct JsonObj parseJson(const char *buffer, unsigned int length);
