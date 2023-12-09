@@ -16,11 +16,12 @@ namespace jsonParse {
 enum JsonValueType{
     JSON_STRING,
     JSON_OBJ,
-    JSON_LIST
+    JSON_LIST,
+    JSON_NUMBER
 };
 
 struct JsonObj{
-    /* VALUE POINT AT EITHER JsonObj OR std::string OR std::vector<JsonValue> */
+    /* VALUE POINTS AT EITHER JsonObj OR std::string OR std::vector<JsonValue> OR float */
     class JsonValue{
     public:
         JsonValue(enum JsonValueType type, void *ressource): type(type), value(ressource) {}
@@ -68,6 +69,10 @@ static bool isWhiteSpace(char element){
     return false;
 }
 
+static bool isNumeric(char value){
+    return value >= '0' && value <= '9';
+}
+
 std::string copyStr(const char *buffer, unsigned int length){
     std::string value;
     for(unsigned int i = 0; i < length; i++){
@@ -79,6 +84,44 @@ std::string copyStr(const char *buffer, unsigned int length){
 
 static std::pair<struct JsonObj, unsigned int> parseJsonObj(const char *buffer, unsigned int length);
 
+static std::pair<struct JsonObj::JsonValue, unsigned int> parseJsonString(const char *buffer, unsigned int length){
+    bool started = false;
+    unsigned int start = 0;
+    unsigned int i = 0;
+    for(; i < length; i++){
+        if(!started && isWhiteSpace(buffer[i])) continue;
+        if(!started && buffer[i] != '\"') return {JsonObj::JsonValue{JSON_STRING, nullptr}, 0};
+        else if(!started){
+            started = true;
+            start = i;
+        }else if(started && buffer[i] == '\"'){
+            std::string str = copyStr(&buffer[start + 1], i - start - 1);
+            return {JsonObj::JsonValue{JSON_STRING, new std::string(std::move(str))}, i};
+        }
+    }
+    return {JsonObj::JsonValue{JSON_STRING, nullptr}, 0};
+}
+
+static std::pair<struct JsonObj::JsonValue, unsigned int> parseJsonNumber(const char *buffer, unsigned int length){
+    bool started = false;
+    unsigned int start = 0;
+    unsigned int i = 0;
+    for(; i < length; i++){
+        if(!started && isWhiteSpace(buffer[i])) continue;
+        if(!started && !isNumeric(buffer[i])) return {JsonObj::JsonValue{JSON_NUMBER, nullptr}, 0};
+        if(!started){
+            started = i;
+            started = true;
+        }else if(started && (isNumeric(buffer[i]) || buffer[i] == '.')) continue;
+        else{
+            std::string str = copyStr(&buffer[start], i - start);
+            const float value = atoi(str.c_str());
+            return {JsonObj::JsonValue{JSON_NUMBER, new float(value)}, i - 1};
+        }
+    }
+    return {JsonObj::JsonValue{JSON_NUMBER, nullptr}, 0};
+}
+
 enum JSON_LIST_PARSING_STATE{
     LIST_WAITING_START,
     LIST_READING_VALUE,
@@ -88,7 +131,6 @@ enum JSON_LIST_PARSING_STATE{
 static std::pair<struct JsonObj::JsonValue, unsigned int> parseList(const char *buffer, unsigned int length){
     std::vector<struct JsonObj::JsonValue> list;
     bool started = false;
-    unsigned int start = 0;
     enum JSON_LIST_PARSING_STATE state = LIST_WAITING_START;
     unsigned int i = 0;
     for(;i < length; i++){
@@ -104,21 +146,22 @@ static std::pair<struct JsonObj::JsonValue, unsigned int> parseList(const char *
                 std::pair<struct JsonObj, unsigned int> pair = parseJsonObj(&buffer[i], length - i - 1);
                 if(pair.second == 0) return {JsonObj::JsonValue(JSON_LIST, nullptr), 0}; 
                 list.push_back({JSON_OBJ, new JsonObj(std::move(pair.first))});
-                state = LIST_WAITING_SEP;
             }else if(buffer[i] == '['){
-                std::pair<struct JsonObj::JsonValue, unsigned int> pair = parseList(&buffer[i], length - i - 1);
+                std::pair<struct JsonObj::JsonValue, unsigned int> pair = parseList(&buffer[i], length - i);
                 if(pair.second == 0) return {JsonObj::JsonValue(JSON_LIST, nullptr), 0};
                 list.push_back(std::move(pair.first));
-                state = LIST_WAITING_SEP;
-            }else if(!started && buffer[i] == '\"'){
-                started = true;
-                start = i;
-            }else if(started && buffer[i] == '\"'){
-                std::string str = copyStr(&buffer[start + 1], i - start - 1);
-                list.push_back({JSON_STRING, new std::string(std::move(str))});
-                started = false;
-                state = LIST_WAITING_SEP;
+            }else if(buffer[i] == '\"'){
+                std::pair<struct JsonObj::JsonValue, unsigned int> pair = parseJsonString(&buffer[i], length - i);
+                if(pair.second == 0) return {JsonObj::JsonValue(JSON_LIST, nullptr), 0};
+                i += pair.second;
+                list.push_back(std::move(pair.first));
+            }else if(isNumeric(buffer[i])){
+                std::pair<struct JsonObj::JsonValue, unsigned int> pair = parseJsonNumber(&buffer[i], length - i);
+                if(pair.second == 0) return {JsonObj::JsonValue(JSON_LIST, nullptr), 0};
+                i += pair.second;
+                list.push_back(std::move(pair.first));
             }
+            state = LIST_WAITING_SEP;
         }break;
         case LIST_WAITING_SEP:{
             if(isWhiteSpace(buffer[i])) continue;
@@ -162,7 +205,7 @@ static std::pair<struct JsonObj, unsigned int> parseJsonObj(const char *buffer, 
                     start = i;
                     reading = true;
                 }else if(reading && buffer[i] == '"'){
-                    strncpy(keyBuffer, &buffer[start + 1], i - start - 1);
+                    strncpy(keyBuffer, &buffer[start + 1], i - start);
                     keyBuffer[i - start - 1] = '\0';
                     state = WAITING_KEY_VALUE_SEP;
                     reading = false;
@@ -178,29 +221,28 @@ static std::pair<struct JsonObj, unsigned int> parseJsonObj(const char *buffer, 
             }break;
             case READING_VALUE:{
                 if(!reading && isWhiteSpace(buffer[i])) continue;
-                if(!reading && buffer[i] == '{'){
-                    std::pair<struct JsonObj, unsigned int> pair = parseJsonObj(&buffer[i], length - i - 1);
+                if(buffer[i] == '{'){
+                    std::pair<struct JsonObj, unsigned int> pair = parseJsonObj(&buffer[i], length - i);
                     if(pair.second == 0) return {std::move(obj), 0};
                     i += pair.second;
                     obj.values.insert({std::string(keyBuffer), JsonObj::JsonValue(JSON_OBJ, new JsonObj(std::move(pair.first)))});
-                }else if(!reading && buffer[i] == '['){
+                }else if(buffer[i] == '['){
                     std::pair<JsonObj::JsonValue, unsigned int> pair = parseList(&buffer[i], length - i);
                     if(pair.second == 0) return {std::move(obj), 0};
                     obj.values.insert({std::string(keyBuffer), std::move(pair.first)});
                     i += pair.second;
-                    state = WAITING_SEP;
-                    reading = false;
-                }else if(!reading && buffer[i] == '\"'){
-                    reading = true;
-                    start = i;
-                }else if(reading && buffer[i] == '\"'){
-                    reading = false;
-                    std::string key = std::string(keyBuffer);
-                    strncpy(keyBuffer, &buffer[start + 1], i - start - 1);
-                    keyBuffer[i - start - 1] = '\0';
-                    std::string value = std::string(keyBuffer);
-                    obj.values.insert({key, JsonObj::JsonValue{JSON_STRING, new std::string(value)}});
+                }else if(buffer[i] == '\"'){
+                    std::pair<struct JsonObj::JsonValue, unsigned int> pair = parseJsonString(&buffer[i], length - i);
+                    if(pair.second == 0) return {JsonObj{}, 0};
+                    i += pair.second;
+                    obj.values.insert({std::string(keyBuffer), std::move(pair.first)});
+                }else if(isNumeric(buffer[i])){
+                    std::pair<struct JsonObj::JsonValue, unsigned int> pair = parseJsonNumber(&buffer[i], length - i);
+                    if(pair.second == 0) return {JsonObj{}, 0};
+                    i += pair.second;
+                    obj.values.insert({std::string(keyBuffer), std::move(pair.first)});
                 }
+                state = WAITING_SEP;
             }break;
             case WAITING_SEP:{
                 if(isWhiteSpace(buffer[i])) continue;

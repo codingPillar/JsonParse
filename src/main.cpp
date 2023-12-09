@@ -1,3 +1,4 @@
+#include <cmath>
 #include <iostream>
 
 #include <gtest/gtest.h>
@@ -9,6 +10,12 @@
 
 using namespace std;
 using namespace jsonParse;
+
+static bool flteq(float a, float b, float precision){
+    return abs(a - b) < precision;
+}
+
+#define TEST_HELPER_FLT_EQUAL(a, b) (flteq(a, b, 0.00001))
 
 TEST(JsonParse, simpleObj){
     const string simpleObj = "{\"name\":\"mister\"}"; 
@@ -52,6 +59,21 @@ TEST(JsonParse, complexObj){
     EXPECT_FALSE(thirdIter == value.values.end());
     EXPECT_EQ(thirdIter->second.type, JSON_STRING); 
     EXPECT_EQ(*((std::string*)thirdIter->second.value), "25"); 
+}
+
+TEST(JsonParse, floatList){
+    const string simpleObj = "{\"values\": [0.9876, 1.547] }"; 
+    struct JsonObj obj = parseJson(simpleObj.c_str(), simpleObj.size());
+    EXPECT_EQ(obj.values.size(), 1);
+    const auto &iter = obj.values.find("values");
+    EXPECT_TRUE(iter != obj.values.end());
+    EXPECT_EQ(iter->second.type, JSON_LIST);
+    const std::vector<JsonObj::JsonValue> &value = *((std::vector<JsonObj::JsonValue>*)iter->second.value);
+    EXPECT_EQ(value.size(), 2);
+    EXPECT_EQ(value[0].type, JSON_NUMBER);
+    TEST_HELPER_FLT_EQUAL(*((float*)value[0].value), 0.9876);
+    EXPECT_EQ(value[1].type, JSON_NUMBER);
+    TEST_HELPER_FLT_EQUAL(*((float*)value[1].value), 1.547);
 }
 
 int main(){
