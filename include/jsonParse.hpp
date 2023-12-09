@@ -1,6 +1,7 @@
 #ifndef JSON_PARSE_H
 #define JSON_PARSE_H
 
+#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -67,19 +68,68 @@ static bool isWhiteSpace(char element){
     return false;
 }
 
+std::string copyStr(const char *buffer, unsigned int length){
+    std::string value;
+    for(unsigned int i = 0; i < length; i++){
+        if(buffer[i] == '\0') break;
+        value += buffer[i];
+    }
+    return value;
+}
+
+static std::pair<struct JsonObj, unsigned int> parseJsonObj(const char *buffer, unsigned int length);
+
+enum JSON_LIST_PARSING_STATE{
+    LIST_WAITING_START,
+    LIST_READING_VALUE,
+    LIST_WAITING_SEP,
+};
 /* RETURN JSON VALUE AND THE LENGTH OF THE STRING THAT HAS BEEN HANDLED */
 static std::pair<struct JsonObj::JsonValue, unsigned int> parseList(const char *buffer, unsigned int length){
     std::vector<struct JsonObj::JsonValue> list;
+    bool started = false;
+    unsigned int start = 0;
+    enum JSON_LIST_PARSING_STATE state = LIST_WAITING_START;
     unsigned int i = 0;
     for(;i < length; i++){
-        if(i == ']') break;
-        /* TODO, PARSE LIST */
+        switch (state) {
+        case LIST_WAITING_START:{
+            if(isWhiteSpace(buffer[i])) continue;
+            else if(buffer[i] != '[') return {JsonObj::JsonValue(JSON_LIST, nullptr), 0};
+            state = LIST_READING_VALUE;
+        }break;
+        case LIST_READING_VALUE:{
+            if(!started && isWhiteSpace(buffer[i])) continue;
+            if(buffer[i] == '{'){
+                std::pair<struct JsonObj, unsigned int> pair = parseJsonObj(&buffer[i], length - i - 1);
+                if(pair.second == 0) return {JsonObj::JsonValue(JSON_LIST, nullptr), 0}; 
+                list.push_back({JSON_OBJ, new JsonObj(std::move(pair.first))});
+                state = LIST_WAITING_SEP;
+            }else if(buffer[i] == '['){
+                std::pair<struct JsonObj::JsonValue, unsigned int> pair = parseList(&buffer[i], length - i - 1);
+                if(pair.second == 0) return {JsonObj::JsonValue(JSON_LIST, nullptr), 0};
+                list.push_back(std::move(pair.first));
+                state = LIST_WAITING_SEP;
+            }else if(!started && buffer[i] == '\"'){
+                started = true;
+                start = i;
+            }else if(started && buffer[i] == '\"'){
+                std::string str = copyStr(&buffer[start + 1], i - start - 1);
+                list.push_back({JSON_STRING, new std::string(std::move(str))});
+                started = false;
+                state = LIST_WAITING_SEP;
+            }
+        }break;
+        case LIST_WAITING_SEP:{
+            if(isWhiteSpace(buffer[i])) continue;
+            if(buffer[i] == ',') state = LIST_READING_VALUE;
+            else if(buffer[i] == ']') return {JsonObj::JsonValue(JSON_LIST, new std::vector(std::move(list))), i};
+        }break;
+        }
     }
     std::pair<JsonObj::JsonValue, unsigned int> pair{JsonObj::JsonValue(JSON_LIST, new std::vector(std::move(list))), i};
     return pair;
 }
-
-/* GLOBAL FUNCTIONS */
 
 /* SUPPORTS ONLY VALUES OF TYPE STRING AND LIST OF NUMBERS */
 enum PARSE_OBJECT_STATE{
@@ -89,20 +139,21 @@ enum PARSE_OBJECT_STATE{
     READING_VALUE,
     WAITING_SEP,
 };
-struct JsonObj parseJson(const char *buffer, unsigned int length){
+static std::pair<struct JsonObj, unsigned int> parseJsonObj(const char *buffer, unsigned int length){
     struct JsonObj obj;
     enum PARSE_OBJECT_STATE state = WAITING_INIT;
     bool reading = false;
     char keyBuffer[MAX_KEY_VALUE_BUFFER_SIZE] = {0};
     unsigned int start = 0;
-    for(unsigned int i = 0; i < length; i++){
+    unsigned int i = 0;
+    for(; i < length; i++){
         switch (state) {
             case WAITING_INIT:{
                 if(buffer[i] == '{') state = READING_KEY;
                 else if(isWhiteSpace(buffer[i])) continue;
                 else{
                     std::cout << "ERROR WHILE PARSING JSON, FIRST CHAR NOT {" << std::endl;
-                    return {};
+                    return {std::move(obj), 0};
                 }
             }break;
             case READING_KEY:{
@@ -122,16 +173,19 @@ struct JsonObj parseJson(const char *buffer, unsigned int length){
                 if(buffer[i] == ':') state = READING_VALUE;
                 else{
                     std::cout << "ERROR WHILE PARSING, WAITING FOR : BUT ENCOUTERED " << buffer[i] << std::endl;
-                    return {};
+                    return {std::move(obj), 0};
                 }
             }break;
             case READING_VALUE:{
                 if(!reading && isWhiteSpace(buffer[i])) continue;
                 if(!reading && buffer[i] == '{'){
-                    /* TODO, IMPLEMENT SUBOBJECTS HANDLING */
+                    std::pair<struct JsonObj, unsigned int> pair = parseJsonObj(&buffer[i], length - i - 1);
+                    if(pair.second == 0) return {std::move(obj), 0};
+                    i += pair.second;
+                    obj.values.insert({std::string(keyBuffer), JsonObj::JsonValue(JSON_OBJ, new JsonObj(std::move(pair.first)))});
                 }else if(!reading && buffer[i] == '['){
                     std::pair<JsonObj::JsonValue, unsigned int> pair = parseList(&buffer[i], length - i);
-                    if(pair.second == 0) return obj;
+                    if(pair.second == 0) return {std::move(obj), 0};
                     obj.values.insert({std::string(keyBuffer), std::move(pair.first)});
                     i += pair.second;
                     state = WAITING_SEP;
@@ -151,15 +205,20 @@ struct JsonObj parseJson(const char *buffer, unsigned int length){
             case WAITING_SEP:{
                 if(isWhiteSpace(buffer[i])) continue;
                 else if(buffer[i] == ',') state = READING_KEY;
-                else if(buffer[i] == '}') return obj;
+                else if(buffer[i] == '}') return {std::move(obj), i};
                 else{
                     std::cout << "WAITING FOR SEPERATOR BUT ENCOUTERED INVALID VALUE, ABORT" << std::endl;
-                    return {};
+                    return {std::move(obj), 0};
                 }
             }break;
         }
     }
-    return obj;
+    return {std::move(obj), i};
+}
+
+/* GLOBAL FUNCTIONS */
+struct JsonObj parseJson(const char *buffer, unsigned int length){
+    return parseJsonObj(buffer, length).first;
 }
 
 }
