@@ -49,8 +49,6 @@ struct JsonObj parseJson(const char *buffer, unsigned int length);
 
 #endif //JSON_PARSE_H
 
-#define JSON_PARSE_IMPLEMENTATION 
-
 // NOLINTBEGIN(misc-definitions-in-headers)
 #ifdef JSON_PARSE_IMPLEMENTATION
 
