@@ -69,7 +69,7 @@ static bool isWhiteSpace(char element){
 }
 
 static bool isNumeric(char value){
-    return value >= '0' && value <= '9';
+    return (value >= '0' && value <= '9') || value == '-';
 }
 
 std::string copyStr(const char *buffer, unsigned int length){
