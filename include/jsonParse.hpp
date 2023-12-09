@@ -49,6 +49,7 @@ struct JsonObj parseJson(const char *buffer, unsigned int length);
 
 #endif //JSON_PARSE_H
 
+//#define JSON_PARSE_IMPLEMENTATION
 // NOLINTBEGIN(misc-definitions-in-headers)
 #ifdef JSON_PARSE_IMPLEMENTATION
 
@@ -126,7 +127,8 @@ enum JSON_LIST_PARSING_STATE{
     LIST_WAITING_SEP,
 };
 /* RETURN JSON VALUE AND THE LENGTH OF THE STRING THAT HAS BEEN HANDLED */
-static std::pair<struct JsonObj::JsonValue, unsigned int> parseList(const char *buffer, unsigned int length){
+#define LIST_RET std::pair<struct JsonObj::JsonValue, unsigned int>
+static LIST_RET parseList(const char *buffer, unsigned int length){
     std::vector<struct JsonObj::JsonValue> list;
     bool started = false;
     enum JSON_LIST_PARSING_STATE state = LIST_WAITING_START;
@@ -145,16 +147,16 @@ static std::pair<struct JsonObj::JsonValue, unsigned int> parseList(const char *
                 if(pair.second == 0) return {JsonObj::JsonValue(JSON_LIST, nullptr), 0}; 
                 list.push_back({JSON_OBJ, new JsonObj(std::move(pair.first))});
             }else if(buffer[i] == '['){
-                std::pair<struct JsonObj::JsonValue, unsigned int> pair = parseList(&buffer[i], length - i);
+                LIST_RET pair = parseList(&buffer[i], length - i);
                 if(pair.second == 0) return {JsonObj::JsonValue(JSON_LIST, nullptr), 0};
                 list.push_back(std::move(pair.first));
             }else if(buffer[i] == '\"'){
-                std::pair<struct JsonObj::JsonValue, unsigned int> pair = parseJsonString(&buffer[i], length - i);
+                LIST_RET pair = parseJsonString(&buffer[i], length - i);
                 if(pair.second == 0) return {JsonObj::JsonValue(JSON_LIST, nullptr), 0};
                 i += pair.second;
                 list.push_back(std::move(pair.first));
             }else if(isNumeric(buffer[i])){
-                std::pair<struct JsonObj::JsonValue, unsigned int> pair = parseJsonNumber(&buffer[i], length - i);
+                LIST_RET pair = parseJsonNumber(&buffer[i], length - i);
                 if(pair.second == 0) return {JsonObj::JsonValue(JSON_LIST, nullptr), 0};
                 i += pair.second;
                 list.push_back(std::move(pair.first));
@@ -164,12 +166,12 @@ static std::pair<struct JsonObj::JsonValue, unsigned int> parseList(const char *
         case LIST_WAITING_SEP:{
             if(isWhiteSpace(buffer[i])) continue;
             if(buffer[i] == ',') state = LIST_READING_VALUE;
-            else if(buffer[i] == ']') return {JsonObj::JsonValue(JSON_LIST, new std::vector(std::move(list))), i};
+            else if(buffer[i] == ']') return {JsonObj::JsonValue(JSON_LIST, new std::vector<JsonObj::JsonValue>(std::move(list))), i};
         }break;
         }
     }
-    std::pair<JsonObj::JsonValue, unsigned int> pair{JsonObj::JsonValue(JSON_LIST, new std::vector(std::move(list))), i};
-    return pair;
+
+    return {JsonObj::JsonValue(JSON_LIST, new std::vector<JsonObj::JsonValue>(std::move(list))), i};
 }
 
 /* SUPPORTS ONLY VALUES OF TYPE STRING AND LIST OF NUMBERS */
