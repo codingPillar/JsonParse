@@ -34,6 +34,26 @@ TEST(JsonParse, simpleList){
     EXPECT_EQ(*((std::string*)value[1].value), "patnais");
 }
 
+TEST(JsonParse, complexObj){
+    const string simpleObj = "{\"person\": {\"name\":\"adam\", \"age\":\"25\"} }"; 
+    struct JsonObj obj = parseJson(simpleObj.c_str(), simpleObj.size());
+    EXPECT_EQ(obj.values.size(), 1);
+    const auto &iter = obj.values.find("person");
+    EXPECT_TRUE(iter != obj.values.end());
+    EXPECT_EQ(iter->second.type, JSON_OBJ);
+
+    const JsonObj &value = *((JsonObj*)iter->second.value);
+    const auto &secondIter = value.values.find("name");
+    EXPECT_FALSE(secondIter == value.values.end());
+    EXPECT_EQ(secondIter->second.type, JSON_STRING); 
+    EXPECT_EQ(*((std::string*)secondIter->second.value), "adam"); 
+
+    const auto &thirdIter = value.values.find("age");
+    EXPECT_FALSE(thirdIter == value.values.end());
+    EXPECT_EQ(thirdIter->second.type, JSON_STRING); 
+    EXPECT_EQ(*((std::string*)thirdIter->second.value), "25"); 
+}
+
 int main(){
     testing::InitGoogleTest();
     return RUN_ALL_TESTS();
