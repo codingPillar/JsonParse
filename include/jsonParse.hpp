@@ -123,7 +123,7 @@ static std::pair<struct JsonObj::JsonValue, int> parseJsonNumber(const char *buf
         }else if(started && (isNumeric(buffer[i]) || buffer[i] == '.')) continue;
         else{
             std::string str = copyStr(&buffer[start], i - start);
-            const float value = atoi(str.c_str());
+            const float value = atof(str.c_str());
             return {JsonObj::JsonValue{JSON_NUMBER, new float(value)}, i - start - 1};
         }
     }

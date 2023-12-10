@@ -15,7 +15,7 @@ static bool flteq(float a, float b, float precision){
     return abs(a - b) < precision;
 }
 
-#define TEST_HELPER_FLT_EQUAL(a, b) (flteq(a, b, 0.00001))
+#define TEST_HELPER_FLT_EQUAL(a, b) EXPECT_TRUE(flteq(a, b, 0.00001))
 
 TEST(JsonParse, simpleObj){
     const string simpleObj = "{\"name\":\"mister\"}"; 
@@ -71,9 +71,9 @@ TEST(JsonParse, floatList){
     const std::vector<JsonObj::JsonValue> &value = *((std::vector<JsonObj::JsonValue>*)iter->second.value);
     EXPECT_EQ(value.size(), 2);
     EXPECT_EQ(value[0].type, JSON_NUMBER);
-    TEST_HELPER_FLT_EQUAL(*((float*)value[0].value), 0.9876);
+    TEST_HELPER_FLT_EQUAL(*((float*)value[0].value), 0.9876F);
     EXPECT_EQ(value[1].type, JSON_NUMBER);
-    TEST_HELPER_FLT_EQUAL(*((float*)value[1].value), 1.547);
+    TEST_HELPER_FLT_EQUAL(*((float*)value[1].value), 1.547F);
 }
 
 TEST(JsonParse, mixObj){
