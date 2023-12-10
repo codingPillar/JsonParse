@@ -76,6 +76,12 @@ TEST(JsonParse, floatList){
     TEST_HELPER_FLT_EQUAL(*((float*)value[1].value), 1.547);
 }
 
+TEST(JsonParse, mixObj){
+    char buffer[] =  "{\"minAngle\": -1.0, \"maxAngle\": 1.0, \"angleStep\": 0.001, \"distances\": [10, 9, 7] }";
+    const JsonObj obj = parseJson(buffer, sizeof(buffer));
+    EXPECT_EQ(obj.values.size(), 4);
+}
+
 int main(){
     testing::InitGoogleTest();
     return RUN_ALL_TESTS();
