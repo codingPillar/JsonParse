@@ -4,8 +4,8 @@
 ```
 make
 ```
-## Be sure to have gtest installed
-## Compilation has been tested with c++11 and c++17
+### Be sure to have gtest installed
+### Compilation has been tested with c++11 and c++17
 
 ## Run Example/Tests
 ```
