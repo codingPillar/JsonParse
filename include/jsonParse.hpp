@@ -13,7 +13,7 @@
 
 namespace jsonParse {
 
-/* TODO, ADD SUPPORT FOR NUMBERS AND BOOL */
+/* TODO, ADD SUPPORT FOR BOOL */
 enum JsonValueType{
     JSON_STRING,
     JSON_OBJ,
