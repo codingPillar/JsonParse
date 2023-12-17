@@ -23,4 +23,4 @@ make
 
 # TODO
 
-## Add support for for json bool type
+## Add support for json bool type
